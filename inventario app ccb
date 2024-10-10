@@ -1,0 +1,86 @@
+import os
+import pandas as pd
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.uix.textinput import TextInput
+from kivy.uix.button import Button
+
+class InventarioApp(App):
+    def build(self):
+        self.dados = None
+        self.bens_localizados = []
+        self.bens_nao_localizados = []
+
+        self.layout = BoxLayout(orientation='vertical')
+
+        # Modificação aqui para permitir entrada manual do caminho do arquivo
+        self.layout.add_widget(Label(text='Arquivo códigos de barras CSV:'))
+        self.input_arquivo = TextInput(multiline=False)
+        self.layout.add_widget(self.input_arquivo)
+
+        self._adicionar_widget(Button(text='Carregar Dados', on_press=self.carregar_dados))
+        self._adicionar_widget(Label(text='Leia o código de barras do bem:'), 'input_codigo')
+        self._adicionar_widget(Button(text='Adicionar ao Inventário', on_press=self.realizar_inventario))
+        self._adicionar_widget(Button(text='Finalizar Inventário', on_press=self.gerar_relatorio))
+
+        self.resultado = Label(text='')
+        self.layout.add_widget(self.resultado)
+
+        return self.layout
+
+    def _adicionar_widget(self, widget, input_name=None):
+        self.layout.add_widget(widget)
+        if input_name:
+            setattr(self, input_name, TextInput(multiline=False))
+            self.layout.add_widget(getattr(self, input_name))
+
+    def carregar_dados(self, instance):
+        arquivo = self.input_arquivo.text
+        if os.path.isfile(arquivo):
+            try:
+                self.dados = pd.read_csv(arquivo, encoding='latin1')
+                self.resultado.text = 'Dados carregados com sucesso!'
+            except Exception as e:
+                self.resultado.text = f'Erro ao carregar o arquivo: {e}'
+        else:
+            self.resultado.text = 'Arquivo não encontrado. Verifique o caminho e tente novamente.'
+
+    def realizar_inventario(self, instance):
+        if self.dados is not None:
+            codigo_barras_lido = self.input_codigo.text.strip()
+            self.dados['codigo_barras'] = self.dados['codigo_barras'].astype(str).str.strip()
+            item_localizado = self.dados['codigo_barras'].eq(codigo_barras_lido).any()
+
+            if item_localizado:
+                self.resultado.text = 'Bem localizado!'
+                self.bens_localizados.append(codigo_barras_lido)
+            else:
+                self.resultado.text = 'Bem não localizado.'
+                self.bens_nao_localizados.append(codigo_barras_lido)
+        else:
+            self.resultado.text = 'Por favor, carregue os dados primeiro.'
+
+    def gerar_relatorio(self, instance):
+        if self.dados is not None:
+            with open("relatorio_inventario.txt", "w") as relatorio:
+                relatorio.write("Relatório de Inventário\n")
+                relatorio.write("="*30 + "\n")
+                relatorio.write(f"Total de bens no sistema: {len(self.dados)}\n")
+                relatorio.write(f"Bens localizados: {len(self.bens_localizados)}\n")
+                relatorio.write(f"Bens não localizados: {len(self.bens_nao_localizados)}\n\n")
+
+                relatorio.write("Bens localizados:\n")
+                for codigo in self.bens_localizados:
+                    relatorio.write(f"Código localizado: {codigo}\n")
+
+                relatorio.write("\nBens não localizados:\n")
+                for codigo in self.bens_nao_localizados:
+                    relatorio.write(f"Código não localizado: {codigo}\n")
+
+            self.resultado.text = 'Relatório gerado: relatorio_inventario.txt'
+        else:
+            self.resultado.text = 'Por favor, carregue os dados primeiro.'
+
+if __name__ == '__main__':
+    InventarioApp().run()
